@@ -13,6 +13,7 @@ const nav = [
   { href: "/content", label: "محتوا و هوش مصنوعی", icon: "◇" },
   { href: "/seo", label: "تحلیلگر سئو", icon: "◎" },
   { href: "/homepage-builder", label: "طراحی صفحه اصلی", icon: "▣" },
+  { href: "/settings/ai", label: "هوش مصنوعی", icon: "⚡" },
   { href: "/settings", label: "تنظیمات", icon: "⚙" },
 ];
 

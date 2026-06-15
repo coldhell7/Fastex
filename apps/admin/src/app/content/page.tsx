@@ -218,7 +218,7 @@ export default function ContentPage() {
       {providerReady === false && (
         <p className="rounded-md border p-3 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
           ⚠️ هیچ ارائه‌دهندهٔ هوش مصنوعی پیکربندی نشده است. ابتدا از صفحهٔ{' '}
-          <a href="/settings" className="font-bold no-underline" style={{ color: "var(--accent)" }}>تنظیمات</a>{' '}
+          <a href="/settings/ai" className="font-bold no-underline" style={{ color: "var(--accent)" }}>تنظیمات هوش مصنوعی</a>{' '}
           یک کلید API ثبت کنید.
         </p>
       )}
