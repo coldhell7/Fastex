@@ -20,15 +20,24 @@ type ProviderUsage = {
   requests: number;
 };
 
+type Tab = "providers" | "prompts" | "usage";
+
 const PROVIDERS = [
-  { id: "gemini", label: "Google Gemini", placeholder: "AIza…" },
-  { id: "openrouter", label: "OpenRouter", placeholder: "sk-or-v1-…" },
-  { id: "deepseek", label: "DeepSeek (مستقیم)", placeholder: "sk-…" },
+  { id: "gemini", label: "Google Gemini", placeholder: "AIza…", icon: "◇", color: "#4285F4" },
+  { id: "openrouter", label: "OpenRouter", placeholder: "sk-or-v1-…", icon: "◇", color: "#10b981" },
+  { id: "deepseek", label: "DeepSeek", placeholder: "sk-…", icon: "◇", color: "#f59e0b" },
 ] as const;
+
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: "providers", label: "سرویس‌ها", icon: "◇" },
+  { id: "prompts", label: "پرامپت‌ها", icon: "☰" },
+  { id: "usage", label: "آمار مصرف", icon: "◉" },
+];
 
 export default function AiSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [activeTab, setActiveTab] = useState<Tab>("providers");
 
   const [settings, setSettings] = useState({
     openrouterModel: "deepseek/deepseek-chat",
@@ -65,6 +74,7 @@ export default function AiSettingsPage() {
   const [models, setModels] = useState<OpenRouterModel[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [loadingModels, setLoadingModels] = useState(false);
+  const [savingModel, setSavingModel] = useState(false);
 
   const providerStatus = (() => {
     if (selectedProvider === "gemini") return geminiStatus;
@@ -96,11 +106,28 @@ export default function AiSettingsPage() {
       const j = await res.json();
       if (j.ok && Array.isArray(j.models)) setModels(j.models);
     } catch {
-      // ignore
     } finally {
       setLoadingModels(false);
     }
   }, []);
+
+  const saveModel = async (model: string) => {
+    if (!model) return;
+    setSavingModel(true);
+    try {
+      const res = await fetch("/api/settings/site", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ openrouterModel: model }),
+      });
+      const j = await res.json();
+      setMessage(j.ok ? "مدل ذخیره شد." : "خطا در ذخیره مدل");
+    } catch {
+      setMessage("خطا در ذخیره مدل");
+    } finally {
+      setSavingModel(false);
+    }
+  };
 
   const fetchUsage = useCallback(async () => {
     setUsageLoading(true);
@@ -112,7 +139,6 @@ export default function AiSettingsPage() {
         setUsageTotals(j.totals || null);
       }
     } catch {
-      // ignore
     } finally {
       setUsageLoading(false);
     }
@@ -165,12 +191,10 @@ export default function AiSettingsPage() {
           ? "/api/settings/openrouter"
           : "/api/settings/deepseek";
 
-      const body = JSON.stringify({ apiKey: t });
-
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body,
+        body: JSON.stringify({ apiKey: t }),
       });
       const j = await res.json();
       if (j.ok) {
@@ -294,19 +318,6 @@ export default function AiSettingsPage() {
 
   if (loading) return <p className="p-8 text-sm">در حال بارگذاری…</p>;
 
-  const statusDot = (provider: string, configured: boolean, connState: ConnectionState) => {
-    const base = !configured
-      ? { color: "#6b7280", label: "پیکربندی نشده", blink: false }
-      : connState === "testing"
-        ? { color: "#f59e0b", label: "در حال بررسی…", blink: false }
-        : connState === "connected"
-          ? { color: "#22c55e", label: "متصل", blink: true }
-          : connState === "failed"
-            ? { color: "#ef4444", label: "خطا در اتصال", blink: true }
-            : { color: "#6b7280", label: "—", blink: false };
-    return { ...base };
-  };
-
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <style>{`
@@ -322,273 +333,391 @@ export default function AiSettingsPage() {
       <div>
         <h1 className="text-3xl font-semibold">تنظیمات هوش مصنوعی</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-          اتصال به سرویس‌های هوش مصنوعی، پرامپت‌ها و آمار مصرف
+          مدیریت سرویس‌های هوش مصنوعی، پرامپت‌های پیش‌فرض و آمار مصرف
         </p>
       </div>
 
       {message && (
-        <div className="rounded-md border p-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}>
+        <div
+          className="rounded-md border p-3 text-sm"
+          style={{
+            borderColor: message.includes("خطا") ? "#ef4444" : "var(--border)",
+            background: message.includes("خطا") ? "rgba(239,68,68,0.1)" : "var(--surface)",
+            color: message.includes("خطا") ? "#ef4444" : "var(--text)",
+          }}
+        >
           {message}
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-[1fr_400px]">
-        <div className="flex flex-col gap-6">
-          <Surface title="اتصال به هوش مصنوعی">
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              انتخاب سرویس، ذخیره توکن و تست اتصال
-            </p>
+      <div
+        className="flex gap-1 rounded-xl border p-1"
+        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+      >
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition-all"
+            style={{
+              background: activeTab === tab.id ? "var(--accent-dim)" : "transparent",
+              color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
+              border: activeTab === tab.id ? "1px solid var(--border-active)" : "1px solid transparent",
+            }}
+          >
+            <span>{tab.icon}</span>
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
 
-            <label className="mt-4 block text-sm font-medium">
-              سرویس هوش مصنوعی
-              <select
-                className="mt-1 w-full rounded-md border p-2 text-sm"
-                style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
-                value={selectedProvider}
-                onChange={(e) => { setSelectedProvider(e.target.value); setTestResult(null); }}
+      {activeTab === "providers" && (
+        <div className="grid gap-6 lg:grid-cols-3">
+          {PROVIDERS.map((p) => {
+            const st = p.id === "gemini" ? geminiStatus : p.id === "openrouter" ? openrouterStatus : deepseekStatus;
+            const conn = aiConnections[p.id];
+            const isSelected = selectedProvider === p.id;
+            const isConfigured = st.configured;
+
+            const connColor = !isConfigured
+              ? "#6b7280"
+              : conn === "testing"
+                ? "#f59e0b"
+                : conn === "connected"
+                  ? "#22c55e"
+                  : conn === "failed"
+                    ? "#ef4444"
+                    : "#6b7280";
+
+            const connLabel = !isConfigured
+              ? "پیکربندی نشده"
+              : conn === "testing"
+                ? "در حال بررسی…"
+                : conn === "connected"
+                  ? "متصل"
+                  : conn === "failed"
+                    ? "خطا"
+                    : "—";
+
+            return (
+              <div
+                key={p.id}
+                className="flex flex-col gap-4 rounded-xl border p-5 transition-all duration-200"
+                style={{
+                  borderColor: isSelected ? "var(--border-active)" : "var(--border)",
+                  background: "var(--glass-bg)",
+                  backdropFilter: "blur(var(--blur-sm))",
+                  WebkitBackdropFilter: "blur(var(--blur-sm))",
+                  boxShadow: isSelected ? "var(--glow)" : "none",
+                }}
               >
-                {PROVIDERS.map((p) => (
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
-              </select>
-            </label>
-
-            {providerStatus.configured && (
-              <div className="mt-3 flex items-center gap-2 text-sm">
-                <span style={{ color: "#22c55e" }}>●</span>
-                <span>{providerStatus.maskedKey}</span>
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  ({providerStatus.source === "env" ? "متغیر محیطی" : "ذخیره محلی"})
-                </span>
-              </div>
-            )}
-
-            <label className="mt-4 block text-sm font-medium">
-              توکن API جدید
-              <input
-                type="password"
-                autoComplete="off"
-                className="mt-1 w-full rounded-md border p-2 text-sm font-mono"
-                style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-                placeholder={currentPlaceholder}
-                dir="ltr"
-              />
-            </label>
-
-            <div className="mt-3 flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={savingToken || !tokenInput.trim()}
-                onClick={() => void saveToken()}
-                className="rounded-md px-4 py-2 text-sm font-bold text-white"
-                style={{ background: "var(--accent)" }}
-              >
-                {savingToken ? "در حال ذخیره…" : "ذخیرهٔ توکن"}
-              </button>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={testing || !providerStatus.configured}
-                  onClick={() => void testConnection()}
-                  className="flex-1 rounded-md border px-3 py-2 text-sm font-bold"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                >
-                  {testing ? "در حال تست…" : "تست (سرور)"}
-                </button>
-                <button
-                  type="button"
-                  disabled={clientTesting || !tokenInput.trim()}
-                  onClick={() => void testDirectConnection()}
-                  className="flex-1 rounded-md border px-3 py-2 text-sm font-bold"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                >
-                  {clientTesting ? "در حال تست…" : "تست (مرورگر)"}
-                </button>
-              </div>
-            </div>
-
-            {testResult && (
-              <div className="mt-4 rounded-md border p-3 text-sm" style={{
-                borderColor: testResult.includes("موفق") ? "var(--border)" : "#ef4444",
-                background: "var(--surface)",
-                color: testResult.includes("موفق") ? "#22c55e" : "#ef4444",
-              }}>
-                <span className="text-[10px] font-bold opacity-60">SERVER</span> {testResult}
-              </div>
-            )}
-
-            {clientTestResult && (
-              <div className="mt-2 rounded-md border p-3 text-sm" style={{
-                borderColor: clientTestResult.includes("موفق") ? "var(--border)" : "#ef4444",
-                background: "var(--surface)",
-                color: clientTestResult.includes("موفق") ? "#22c55e" : "#ef4444",
-              }}>
-                <span className="text-[10px] font-bold opacity-60">CLIENT</span> {clientTestResult}
-              </div>
-            )}
-
-            {selectedProvider === "openrouter" && models.length > 0 && (
-              <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
-                <label className="block text-sm font-medium">
-                  مدل OpenRouter
-                  <div className="mt-1 flex gap-2">
-                    <select
-                      className="flex-1 rounded-md border p-2 text-sm"
-                      style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="flex h-10 w-10 items-center justify-center rounded-lg text-lg"
+                      style={{ background: `${p.color}20`, color: p.color }}
                     >
-                      {models.map((m) => (
-                        <option key={m.id} value={m.id}>{m.name || m.id}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!selectedModel) return;
-                        const res = await fetch("/api/settings/site", {
-                          method: "PUT",
-                          headers: { "content-type": "application/json" },
-                          body: JSON.stringify({ openrouterModel: selectedModel }),
-                        });
-                        const j = await res.json();
-                        setMessage(j.ok ? "مدل OpenRouter ذخیره شد." : "خطا در ذخیره مدل");
-                      }}
-                      className="rounded-md px-3 py-2 text-sm font-bold text-white"
-                      style={{ background: "var(--accent)" }}
-                    >
-                      ذخیره
-                    </button>
+                      {p.icon}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold">{p.label}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span
+                          className={`inline-block h-2 w-2 rounded-full ${conn === "testing" ? "" : ""}`}
+                          style={{
+                            backgroundColor: connColor,
+                            animation: conn === "testing" ? "ai-blink 1.2s ease-in-out infinite" : "none",
+                          }}
+                        />
+                        <span className="text-[11px]" style={{ color: connColor }}>{connLabel}</span>
+                      </div>
+                    </div>
                   </div>
-                </label>
-              </div>
-            )}
+                  <input
+                    type="radio"
+                    name="provider-select"
+                    checked={isSelected}
+                    onChange={() => {
+                      setSelectedProvider(p.id);
+                      setTestResult(null);
+                      setClientTestResult(null);
+                    }}
+                    className="h-4 w-4 cursor-pointer accent-sky-500"
+                  />
+                </div>
 
-            <div className="mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}>
-              <p className="mb-3 text-xs font-medium" style={{ color: "var(--text-muted)" }}>وضعیت سرویس‌ها</p>
-              <div className="flex flex-col gap-2">
-                {PROVIDERS.map((p) => {
-                  const st = p.id === "gemini" ? geminiStatus : p.id === "openrouter" ? openrouterStatus : deepseekStatus;
-                  const conn = aiConnections[p.id];
-                  const dot = statusDot(p.id, st.configured, conn);
-                  return (
-                    <div key={p.id} className="flex items-center gap-2 text-sm">
-                      <span
-                        className={`${dot.blink ? "dot-blink" : ""}`}
-                        style={{ color: dot.color, fontSize: "1.2rem", lineHeight: "1" }}
-                      >●</span>
-                      <span style={{ color: "var(--text)" }}>{p.label}</span>
-                      {st.configured && (
-                        <span className="font-mono text-xs" style={{ color: "var(--text-muted)" }}>
+                {isSelected && (
+                  <div className="flex flex-col gap-3 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+                    {isConfigured && (
+                      <div className="flex items-center gap-2 rounded-md px-3 py-2 text-xs" style={{ background: "var(--surface)" }}>
+                        <span style={{ color: "#22c55e" }}>●</span>
+                        <span className="font-mono" style={{ color: "var(--text-muted)" }}>
                           {st.maskedKey}
                         </span>
-                      )}
-                      <span className="text-xs" style={{ color: dot.color }}>{dot.label}</span>
+                        <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                          ({st.source === "env" ? "متغیر محیطی" : "ذخیره محلی"})
+                        </span>
+                      </div>
+                    )}
+
+                    <label className="block text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                      توکن API جدید
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        className="mt-1 w-full rounded-md border p-2 text-sm font-mono"
+                        style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
+                        value={tokenInput}
+                        onChange={(e) => setTokenInput(e.target.value)}
+                        placeholder={currentPlaceholder}
+                        dir="ltr"
+                      />
+                    </label>
+
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        disabled={savingToken || !tokenInput.trim()}
+                        onClick={() => void saveToken()}
+                        className="w-full rounded-md px-4 py-2 text-sm font-bold text-white transition-opacity disabled:opacity-50"
+                        style={{ background: "var(--accent)" }}
+                      >
+                        {savingToken ? "در حال ذخیره…" : "ذخیرهٔ توکن"}
+                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={testing || !isConfigured}
+                          onClick={() => void testConnection()}
+                          className="flex-1 rounded-md border px-3 py-2 text-sm font-bold transition-opacity disabled:opacity-50"
+                          style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                        >
+                          {testing ? "در حال تست…" : "تست (سرور)"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={clientTesting || !tokenInput.trim()}
+                          onClick={() => void testDirectConnection()}
+                          className="flex-1 rounded-md border px-3 py-2 text-sm font-bold transition-opacity disabled:opacity-50"
+                          style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                        >
+                          {clientTesting ? "در حال تست…" : "تست (مرورگر)"}
+                        </button>
+                      </div>
                     </div>
-                  );
-                })}
+
+                    {testResult && (
+                      <div
+                        className="rounded-md border p-2.5 text-xs"
+                        style={{
+                          borderColor: testResult.includes("موفق") ? "#22c55e" : "#ef4444",
+                          background: testResult.includes("موفق") ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+                          color: testResult.includes("موفق") ? "#22c55e" : "#ef4444",
+                        }}
+                      >
+                        <span className="text-[9px] font-bold opacity-60">SERVER</span> {testResult}
+                      </div>
+                    )}
+
+                    {clientTestResult && (
+                      <div
+                        className="rounded-md border p-2.5 text-xs"
+                        style={{
+                          borderColor: clientTestResult.includes("موفق") ? "#22c55e" : "#ef4444",
+                          background: clientTestResult.includes("موفق") ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+                          color: clientTestResult.includes("موفق") ? "#22c55e" : "#ef4444",
+                        }}
+                      >
+                        <span className="text-[9px] font-bold opacity-60">CLIENT</span> {clientTestResult}
+                      </div>
+                    )}
+
+                    {p.id === "openrouter" && models.length > 0 && (
+                      <div className="border-t pt-3" style={{ borderColor: "var(--border)" }}>
+                        <label className="block text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                          مدل OpenRouter
+                          <div className="mt-1 flex gap-2">
+                            <select
+                              className="flex-1 rounded-md border p-2 text-xs"
+                              style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
+                              value={selectedModel}
+                              onChange={(e) => setSelectedModel(e.target.value)}
+                            >
+                              {models.map((m) => (
+                                <option key={m.id} value={m.id}>{m.name || m.id}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={savingModel || !selectedModel}
+                              onClick={() => void saveModel(selectedModel)}
+                              className="rounded-md px-3 py-2 text-xs font-bold text-white transition-opacity disabled:opacity-50"
+                              style={{ background: "var(--accent)" }}
+                            >
+                              {savingModel ? "…" : "✓"}
+                            </button>
+                          </div>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
+            );
+          })}
+        </div>
+      )}
+
+      {activeTab === "prompts" && (
+        <div className="flex flex-col gap-6">
+          <Surface title="پرامپت تولید محتوا">
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              برای تولید محتوای متنی (مقالات، صفحات). متغیرهای {'{title}'}، {'{body}'} و {'{keywords}'} خودکار جایگزین می‌شوند.
+            </p>
+            <textarea
+              className="mt-4 w-full rounded-md border p-3 text-sm font-mono leading-relaxed"
+              style={{
+                borderColor: "var(--border)",
+                background: "var(--surface)",
+                color: "var(--text)",
+                minHeight: "280px",
+                direction: "ltr",
+              }}
+              value={contentPrompt}
+              onChange={(e) => setContentPrompt(e.target.value)}
+              dir="ltr"
+            />
           </Surface>
 
-          <Surface title="پرامپت‌های پیش‌فرض">
+          <Surface title="پرامپت تولید محصول">
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              این پرامپت‌ها برای تولید محتوا و محصول استفاده می‌شوند. {'{title}'}، {'{body}'} و {'{keywords}'} به‌طور خودکار جایگزین می‌شوند.
+              برای تولید خودکار توضیحات و متادیتای محصولات. متغیرهای {'{title}'}، {'{body}'} و {'{keywords}'} خودکار جایگزین می‌شوند.
             </p>
+            <textarea
+              className="mt-4 w-full rounded-md border p-3 text-sm font-mono leading-relaxed"
+              style={{
+                borderColor: "var(--border)",
+                background: "var(--surface)",
+                color: "var(--text)",
+                minHeight: "280px",
+                direction: "ltr",
+              }}
+              value={productPrompt}
+              onChange={(e) => setProductPrompt(e.target.value)}
+              dir="ltr"
+            />
+          </Surface>
 
-            <label className="mt-4 block text-sm font-medium">
-              پرامپت تولید محتوا
-              <textarea
-                className="mt-1 w-full rounded-md border p-2 text-sm font-mono"
-                style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)", minHeight: "200px" }}
-                value={contentPrompt}
-                onChange={(e) => setContentPrompt(e.target.value)}
-                dir="ltr"
-              />
-            </label>
-
-            <label className="mt-4 block text-sm font-medium">
-              پرامپت تولید محصول
-              <textarea
-                className="mt-1 w-full rounded-md border p-2 text-sm font-mono"
-                style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)", minHeight: "200px" }}
-                value={productPrompt}
-                onChange={(e) => setProductPrompt(e.target.value)}
-                dir="ltr"
-              />
-            </label>
-
+          <div className="flex justify-end">
             <button
               type="button"
               disabled={savingPrompts}
               onClick={() => void savePrompts()}
-              className="mt-4 rounded-md px-4 py-2 text-sm font-bold text-white"
+              className="rounded-md px-8 py-2.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
               style={{ background: "var(--accent)" }}
             >
               {savingPrompts ? "در حال ذخیره…" : "ذخیرهٔ پرامپت‌ها"}
             </button>
-          </Surface>
+          </div>
         </div>
+      )}
 
-        <div className="flex flex-col gap-6">
-          <Surface title="آمار مصرف">
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              تعداد توکن مصرفی هر سرویس
-            </p>
-
-            <div className="mt-3 flex gap-2">
-              {usageLoading ? null : (
-                <button
-                  type="button"
-                  onClick={() => void fetchUsage()}
-                  className="rounded-md border px-3 py-1.5 text-xs font-bold"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                >
-                  بروزرسانی
-                </button>
-              )}
-            </div>
-
+      {activeTab === "usage" && (
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <Surface title="مصرف توکن‌ها">
             {usageLoading ? (
-              <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>در حال بارگذاری…</p>
+              <p className="py-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+                در حال بارگذاری…
+              </p>
             ) : Object.keys(tokenUsage).length > 0 ? (
-              <div className="mt-3 overflow-auto">
-                <table className="w-full text-start text-xs">
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
                   <thead>
-                    <tr>
-                      <th className="pb-1.5 font-medium">سرویس</th>
-                      <th className="pb-1.5 font-medium">درخواست</th>
-                      <th className="pb-1.5 font-medium">توکن کل</th>
+                    <tr className="border-b" style={{ borderColor: "var(--border)" }}>
+                      <th className="pb-3 text-right font-medium">سرویس</th>
+                      <th className="pb-3 text-right font-medium">درخواست‌ها</th>
+                      <th className="pb-3 text-right font-medium">ورودی</th>
+                      <th className="pb-3 text-right font-medium">خروجی</th>
+                      <th className="pb-3 text-right font-medium">مجموع توکن</th>
                     </tr>
                   </thead>
                   <tbody>
                     {Object.entries(tokenUsage).map(([provider, u]) => (
-                      <tr key={provider} className="border-t" style={{ borderColor: "var(--border)" }}>
-                        <td className="py-1.5">{provider === "gemini" ? "Gemini" : provider === "openrouter" ? "OpenRouter" : "DeepSeek"}</td>
-                        <td className="py-1.5 font-mono">{u.requests.toLocaleString("fa-IR")}</td>
-                        <td className="py-1.5 font-mono" dir="ltr">{u.totalTokens.toLocaleString("fa-IR")}</td>
+                      <tr key={provider} className="border-b" style={{ borderColor: "var(--border)" }}>
+                        <td className="py-3 font-medium">
+                          {provider === "gemini" ? "Gemini" : provider === "openrouter" ? "OpenRouter" : "DeepSeek"}
+                        </td>
+                        <td className="py-3 font-mono text-xs">{u.requests.toLocaleString("fa-IR")}</td>
+                        <td className="py-3 font-mono text-xs">{u.promptTokens.toLocaleString("fa-IR")}</td>
+                        <td className="py-3 font-mono text-xs">{u.completionTokens.toLocaleString("fa-IR")}</td>
+                        <td className="py-3 font-mono text-xs font-bold">{u.totalTokens.toLocaleString("fa-IR")}</td>
                       </tr>
                     ))}
                     {usageTotals && (
-                      <tr className="border-t font-bold" style={{ borderColor: "var(--border)" }}>
-                        <td className="py-1.5">جمع</td>
-                        <td className="py-1.5 font-mono">{usageTotals.requests.toLocaleString("fa-IR")}</td>
-                        <td className="py-1.5 font-mono" dir="ltr">{usageTotals.totalTokens.toLocaleString("fa-IR")}</td>
+                      <tr className="font-bold" style={{ color: "var(--accent)" }}>
+                        <td className="py-3">جمع کل</td>
+                        <td className="py-3 font-mono text-xs">{usageTotals.requests.toLocaleString("fa-IR")}</td>
+                        <td className="py-3 font-mono text-xs">{usageTotals.promptTokens.toLocaleString("fa-IR")}</td>
+                        <td className="py-3 font-mono text-xs">{usageTotals.completionTokens.toLocaleString("fa-IR")}</td>
+                        <td className="py-3 font-mono text-xs">{usageTotals.totalTokens.toLocaleString("fa-IR")}</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                {usageLoading ? "" : "هنوز مصرفی ثبت نشده است."}
+              <p className="py-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+                هنوز مصرفی ثبت نشده است.
               </p>
             )}
           </Surface>
+
+          <div className="flex flex-col gap-4">
+            <Surface title="خلاصه">
+              {usageTotals ? (
+                <div className="flex flex-col gap-3">
+                  <div
+                    className="rounded-lg p-4 text-center"
+                    style={{ background: "var(--accent-dim)" }}
+                  >
+                    <p className="text-2xl font-bold" style={{ color: "var(--accent)" }}>
+                      {usageTotals.totalTokens.toLocaleString("fa-IR")}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                      مجموع توکن مصرفی
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-lg p-3 text-center" style={{ background: "var(--surface)" }}>
+                      <p className="text-lg font-bold">{usageTotals.requests.toLocaleString("fa-IR")}</p>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>درخواست</p>
+                    </div>
+                    <div className="rounded-lg p-3 text-center" style={{ background: "var(--surface)" }}>
+                      <p className="text-lg font-bold">{Object.keys(tokenUsage).length}</p>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>سرویس فعال</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  داده‌ای برای نمایش وجود ندارد.
+                </p>
+              )}
+            </Surface>
+
+            <button
+              type="button"
+              disabled={usageLoading}
+              onClick={() => void fetchUsage()}
+              className="w-full rounded-md border px-4 py-2.5 text-sm font-bold transition-opacity disabled:opacity-50"
+              style={{ borderColor: "var(--border)", color: "var(--text)" }}
+            >
+              {usageLoading ? "در حال بروزرسانی…" : "بروزرسانی آمار"}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
