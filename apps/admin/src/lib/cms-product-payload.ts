@@ -50,6 +50,10 @@ export function mergeProductPayload(body: Partial<CmsProduct>, existing?: CmsPro
         ? String(body.bodyHtml).trim() || undefined
         : existing?.bodyHtml,
     priceToman: Math.max(0, Math.round(Number(body.priceToman ?? existing?.priceToman ?? 0))),
+    originalPriceToman:
+      body.originalPriceToman !== undefined
+        ? Math.max(0, Math.round(Number(body.originalPriceToman)))
+        : existing?.originalPriceToman,
     badge:
       body.badge !== undefined
         ? String(body.badge).trim() || undefined

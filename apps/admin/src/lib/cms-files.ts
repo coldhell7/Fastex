@@ -1,12 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { CmsMedia, CmsPage, CmsPost, CmsProduct } from "@repo/cms/types";
 
-const CMS_CONTENT_DIR = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../../../packages/cms/content",
-);
+const CMS_CONTENT_DIR = path.join(process.cwd(), "../../packages/cms/content");
 
 function resolveContentFile(
   name: "posts.json" | "pages.json" | "media.json" | "products.json",
