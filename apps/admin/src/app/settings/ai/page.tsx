@@ -335,6 +335,23 @@ export default function AiSettingsPage() {
         <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
           مدیریت سرویس‌های هوش مصنوعی، پرامپت‌های پیش‌فرض و آمار مصرف
         </p>
+        <div
+          className="mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold"
+          style={{
+            background: "var(--accent-dim)",
+            color: "var(--accent)",
+            border: "1px solid var(--border-active)",
+          }}
+        >
+          <span>AI پیش‌فرض:</span>
+          <span className="font-mono">
+            {settings.defaultAiProvider === "gemini"
+              ? "Google Gemini"
+              : settings.defaultAiProvider === "openrouter"
+                ? "OpenRouter"
+                : "DeepSeek"}
+          </span>
+        </div>
       </div>
 
       {message && (
