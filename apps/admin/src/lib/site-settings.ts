@@ -4,7 +4,7 @@ import path from "node:path";
 const SETTINGS_FILE = path.join(process.cwd(), ".data", "site-settings.json");
 
 export type ThemeMode = "dark" | "light" | "auto";
-export type AiProvider = "gemini" | "openrouter" | "deepseek";
+export type AiProvider = "gemini" | "openrouter" | "deepseek" | "anthropic";
 
 export type SiteSettings = {
   siteName: string;
@@ -15,6 +15,8 @@ export type SiteSettings = {
   openrouterModel: string;
   openrouterBaseUrl: string;
   deepseekApiKey: string;
+  anthropicApiKey: string;
+  anthropicModel: string;
   defaultAiProvider: AiProvider;
   faviconDataUrl: string;
   theme: ThemeMode;
@@ -44,6 +46,8 @@ const DEFAULTS: SiteSettings = {
   openrouterModel: "deepseek/deepseek-chat",
   openrouterBaseUrl: "https://openrouter.ai",
   deepseekApiKey: "",
+  anthropicApiKey: "",
+  anthropicModel: "claude-haiku-4-5-20251001",
   defaultAiProvider: "deepseek",
   faviconDataUrl: "",
   theme: "dark",
@@ -230,8 +234,31 @@ export function getProductPrompt(): string {
 
 export function getDefaultAiProvider(): AiProvider {
   const fromEnv = process.env.DEFAULT_AI_PROVIDER?.trim();
-  if (fromEnv && ["gemini", "openrouter", "deepseek"].includes(fromEnv)) return fromEnv as AiProvider;
+  if (fromEnv && ["gemini", "openrouter", "deepseek", "anthropic"].includes(fromEnv)) return fromEnv as AiProvider;
   const settings = loadSettings();
-  if (["gemini", "openrouter", "deepseek"].includes(settings.defaultAiProvider)) return settings.defaultAiProvider;
+  if (["gemini", "openrouter", "deepseek", "anthropic"].includes(settings.defaultAiProvider)) return settings.defaultAiProvider;
   return "deepseek";
+}
+
+export function readAnthropicApiKeyFromFile(): string | null {
+  const settings = loadSettings();
+  return settings.anthropicApiKey?.trim() || null;
+}
+
+export function writeAnthropicApiKeyToFile(apiKey: string): void {
+  saveSettings({ anthropicApiKey: apiKey.trim() });
+}
+
+export function getEffectiveAnthropicApiKey(): string | null {
+  const fromEnv = process.env.ANTHROPIC_API_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  const settings = loadSettings();
+  return settings.anthropicApiKey?.trim() || null;
+}
+
+export function getAnthropicModel(): string {
+  const fromEnv = process.env.ANTHROPIC_MODEL?.trim();
+  if (fromEnv) return fromEnv;
+  const settings = loadSettings();
+  return settings.anthropicModel?.trim() || "claude-haiku-4-5-20251001";
 }

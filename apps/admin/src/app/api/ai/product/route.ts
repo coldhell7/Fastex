@@ -9,6 +9,8 @@ import {
   getOpenRouterBaseUrl,
   getDefaultAiProvider,
   getEffectiveDeepSeekApiKey,
+  getEffectiveAnthropicApiKey,
+  getAnthropicModel,
   getProductPrompt,
 } from "@/lib/site-settings";
 import { trackUsage } from "@/lib/ai-usage";
@@ -116,6 +118,38 @@ async function tryDeepSeek(title: string, body: string, keywords: string) {
   return json.choices?.[0]?.message?.content ?? null;
 }
 
+async function tryAnthropic(title: string, body: string, keywords: string) {
+  const apiKey = getEffectiveAnthropicApiKey();
+  if (!apiKey) return null;
+
+  const prompt = buildPrompt(title, body, keywords);
+  const model = getAnthropicModel();
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Anthropic ${res.status}: ${errBody}`);
+  }
+
+  const json = await res.json() as { content?: Array<{ text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
+  const anUsage = json.usage;
+  if (anUsage) trackUsage("anthropic", anUsage.input_tokens ?? 0, anUsage.output_tokens ?? 0);
+  return json.content?.[0]?.text ?? null;
+}
+
 export async function POST(req: Request) {
   try {
     const jsonBody = (await req.json()) as { title?: string; body?: string; keywords?: string };
@@ -143,7 +177,7 @@ export async function POST(req: Request) {
     const tryOrder = [
       ...new Set([
         defaultProvider,
-        ...(["deepseek", "openrouter", "gemini"] as const).filter((p) => p !== defaultProvider),
+        ...(["anthropic", "deepseek", "openrouter", "gemini"] as const).filter((p) => p !== defaultProvider),
       ]),
     ];
 
@@ -154,6 +188,7 @@ export async function POST(req: Request) {
       try {
         if (p === "deepseek") text = await tryDeepSeek(title, existingBody, keywords);
         else if (p === "openrouter") text = await tryOpenRouter(title, existingBody, keywords);
+        else if (p === "anthropic") text = await tryAnthropic(title, existingBody, keywords);
         else text = await tryGemini(title, existingBody, keywords);
         if (text) { source = p; break; }
       } catch (e) {

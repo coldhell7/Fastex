@@ -3,6 +3,8 @@ import {
   getEffectiveGeminiApiKey,
   getEffectiveOpenRouterApiKey,
   getEffectiveDeepSeekApiKey,
+  getEffectiveAnthropicApiKey,
+  getAnthropicModel,
   getOpenRouterBaseUrl,
   getOpenRouterModel,
 } from "@/lib/site-settings";
@@ -79,6 +81,27 @@ async function testDeepSeek(): Promise<string | null> {
   return "اتصال موفق به DeepSeek";
 }
 
+async function testAnthropic(): Promise<string | null> {
+  const key = getEffectiveAnthropicApiKey();
+  if (!key) return null;
+  const model = getAnthropicModel();
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 10,
+      messages: [{ role: "user", content: "سلام" }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  return `اتصال موفق به Anthropic Claude (${model})`;
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { provider?: string };
@@ -87,6 +110,7 @@ export async function POST(req: Request) {
     let message: string | null = null;
     if (provider === "gemini") message = await testGemini();
     else if (provider === "openrouter") message = await testOpenRouter();
+    else if (provider === "anthropic") message = await testAnthropic();
     else message = await testDeepSeek();
 
     if (!message) {

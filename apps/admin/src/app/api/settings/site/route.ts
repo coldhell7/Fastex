@@ -3,6 +3,7 @@ import {
   getEffectiveDeepSeekApiKey,
   getEffectiveGeminiApiKey,
   getEffectiveOpenRouterApiKey,
+  getEffectiveAnthropicApiKey,
   getSiteSettings,
   maskApiKey,
   updateSiteSettings,
@@ -25,6 +26,9 @@ export async function GET() {
 
   const deepseekKey = getEffectiveDeepSeekApiKey();
   const envDs = Boolean(process.env.DEEPSEEK_API_KEY?.trim());
+
+  const anthropicKey = getEffectiveAnthropicApiKey();
+  const envAn = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
 
   return NextResponse.json({
     ok: true,
@@ -69,6 +73,11 @@ export async function GET() {
       source: envDs ? "env" : deepseekKey ? "file" : "none",
       maskedKey: deepseekKey ? maskApiKey(deepseekKey) : null,
     },
+    anthropic: {
+      configured: Boolean(anthropicKey),
+      source: envAn ? "env" : anthropicKey ? "file" : "none",
+      maskedKey: anthropicKey ? maskApiKey(anthropicKey) : null,
+    },
   });
 }
 
@@ -97,7 +106,7 @@ export async function PUT(req: Request) {
     if (body.accentLight !== undefined) updates.accentLight = body.accentLight;
     if (body.openrouterModel !== undefined) updates.openrouterModel = body.openrouterModel;
     if (body.openrouterBaseUrl !== undefined) updates.openrouterBaseUrl = body.openrouterBaseUrl;
-    if (body.defaultAiProvider !== undefined) updates.defaultAiProvider = body.defaultAiProvider as "gemini" | "openrouter" | "deepseek";
+    if (body.defaultAiProvider !== undefined) updates.defaultAiProvider = body.defaultAiProvider as "gemini" | "openrouter" | "deepseek" | "anthropic";
     if (body.contentPrompt !== undefined) updates.contentPrompt = body.contentPrompt;
     if (body.productPrompt !== undefined) updates.productPrompt = body.productPrompt;
 
