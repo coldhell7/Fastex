@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { readProducts, writeProducts } from "@/lib/cms-files";
 import { mergeProductPayload } from "@/lib/cms-product-payload";
 import type { CmsProduct } from "@repo/cms/types";
+import { okResponse, errorResponse } from "@/lib/cms-utils";
+import { logger } from "@repo/shared";
 
 export const runtime = "nodejs";
 
@@ -19,23 +21,20 @@ export async function PUT(req: Request) {
     }
     products[idx] = { ...products[idx], ...body };
     writeProducts(products);
-    return NextResponse.json({ ok: true, product: products[idx] });
+    logger.info(`products (list PUT): updated ${body.id}`);
+    return okResponse({ product: products[idx] });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, message: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return errorResponse(e);
   }
 }
 
 export async function GET() {
   try {
-    return NextResponse.json({ ok: true, products: readProducts() });
+    const products = readProducts();
+    logger.info(`products (list GET): ${products.length} items`);
+    return okResponse({ products });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, message: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return errorResponse(e);
   }
 }
 
@@ -53,11 +52,9 @@ export async function POST(req: Request) {
     const product: CmsProduct = { ...merged, id: randomUUID() };
     products.unshift(product);
     writeProducts(products);
-    return NextResponse.json({ ok: true, product });
+    logger.info(`products (POST): created ${product.slug}`);
+    return okResponse({ product });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, message: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return errorResponse(e);
   }
 }

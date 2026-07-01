@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
 
 const TOOLS = [
   { id: "bold", label: "B", cmd: "bold", title: "درشت" },
@@ -30,12 +30,35 @@ const TOOLS = [
   { id: "source", label: "{ }", cmd: "source", title: "نمایش HTML" },
 ];
 
+/**
+ * Safely execute a document.execCommand with a deprecation notice.
+ * execCommand is deprecated but remains the only viable cross-browser
+ * API for contentEditable formatting. A try-catch ensures no crashes
+ * in environments where it is unsupported.
+ */
+function safeExecCommand(command: string, showDefaultUI = false, value?: string): boolean {
+  try {
+    const result = document.execCommand(command, showDefaultUI, value);
+    if (!result) {
+      console.warn(`[RichEditor] execCommand("${command}") returned false — the command may not be supported.`);
+    }
+    return result;
+  } catch (err) {
+    console.error(`[RichEditor] execCommand("${command}") threw:`, err);
+    return false;
+  }
+}
+
+type ModalType = "link" | "image" | null;
+
 export default function RichEditor({ value, onChange, placeholder }: { value: string; onChange: (html: string) => void; placeholder?: string }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [showSource, setShowSource] = useState(false);
   const [sourceHtml, setSourceHtml] = useState(value);
+  const [modal, setModal] = useState<ModalType>(null);
+  const [modalValue, setModalValue] = useState("");
 
-  const exec = (tool: (typeof TOOLS)[0]) => {
+  const exec = useCallback((tool: (typeof TOOLS)[0]) => {
     if (tool.cmd === "source") {
       if (showSource) {
         if (editorRef.current) editorRef.current.innerHTML = sourceHtml;
@@ -47,21 +70,43 @@ export default function RichEditor({ value, onChange, placeholder }: { value: st
       return;
     }
     if (tool.cmd === "link") {
-      const url = prompt("آدرس لینک:");
-      if (url) document.execCommand("createLink", false, url);
+      setModal("link");
+      setModalValue("");
       return;
     }
     if (tool.cmd === "image") {
-      const url = prompt("آدرس تصویر:");
-      if (url) document.execCommand("insertImage", false, url);
+      setModal("image");
+      setModalValue("");
       return;
     }
-    document.execCommand(tool.cmd, false, (tool as Record<string, string>).arg ?? "");
+    safeExecCommand(tool.cmd, false, (tool as Record<string, string>).arg ?? "");
     if (editorRef.current) onChange(editorRef.current.innerHTML);
-  };
+  }, [showSource, sourceHtml, onChange]);
+
+  const handleModalConfirm = useCallback(() => {
+    if (!modal) return;
+    const val = modalValue.trim();
+    if (!val) {
+      setModal(null);
+      return;
+    }
+    if (modal === "link") {
+      safeExecCommand("createLink", false, val);
+    } else {
+      safeExecCommand("insertImage", false, val);
+    }
+    if (editorRef.current) onChange(editorRef.current.innerHTML);
+    setModal(null);
+    setModalValue("");
+  }, [modal, modalValue, onChange]);
+
+  const handleModalCancel = useCallback(() => {
+    setModal(null);
+    setModalValue("");
+  }, []);
 
   return (
-    <div className="rounded-md border" style={{ borderColor: "var(--border)" }}>
+    <div className="rounded-md border" style={{ borderColor: "var(--border)", position: "relative" }}>
       <div
         className="flex flex-wrap items-center gap-1 border-b p-2"
         style={{ borderColor: "var(--border)", background: "var(--surface)" }}
@@ -106,6 +151,95 @@ export default function RichEditor({ value, onChange, placeholder }: { value: st
           }}
           data-placeholder={placeholder}
         />
+      )}
+
+      {/* Modal for link/image insertion */}
+      {modal && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+            borderRadius: "inherit",
+          }}
+          onClick={handleModalCancel}
+        >
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "12px",
+              padding: "20px",
+              minWidth: "320px",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 12px", fontSize: "14px", fontWeight: 700 }}>
+              {modal === "link" ? "درج لینک" : "درج تصویر"}
+            </h3>
+            <input
+              type="text"
+              value={modalValue}
+              onChange={(e) => setModalValue(e.target.value)}
+              placeholder={modal === "link" ? "https://..." : "https://... یا /images/..."}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                background: "var(--bg)",
+                color: "var(--text)",
+                fontSize: "13px",
+                direction: "ltr",
+                boxSizing: "border-box",
+                marginBottom: "12px",
+              }}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleModalConfirm();
+                if (e.key === "Escape") handleModalCancel();
+              }}
+            />
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={handleModalCancel}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  color: "var(--text)",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                }}
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={handleModalConfirm}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "var(--accent)",
+                  color: "var(--accent-foreground)",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {modal === "link" ? "درج لینک" : "درج تصویر"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -34,28 +34,65 @@ const TOOLS: ToolItem[] = [
   { cmd: "insertHorizontalRule", label: "—", title: "خط جدا" },
 ];
 
+/**
+ * Safely execute document.execCommand with deprecation notice.
+ * execCommand is deprecated but remains the only viable cross-browser
+ * API for contentEditable formatting. A try-catch prevents crashes.
+ */
+function safeExecCommand(command: string, showDefaultUI = false, value?: string): boolean {
+  try {
+    const result = document.execCommand(command, showDefaultUI, value);
+    if (!result) {
+      console.warn(`[RichTextEditor] execCommand("${command}") returned false — may not be supported.`);
+    }
+    return result;
+  } catch (err) {
+    console.error(`[RichTextEditor] execCommand("${command}") threw:`, err);
+    return false;
+  }
+}
+
 export default function RichTextEditor({ value, onChange, placeholder, height = 300 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
 
   const exec = useCallback((cmd: string, val?: string) => {
     if (cmd === "createLink") {
-      const url = prompt("آدرس لینک:");
-      if (url) document.execCommand(cmd, false, url);
-    } else if (cmd === "formatBlock") {
-      document.execCommand(cmd, false, `<${val}>`);
+      setLinkModalOpen(true);
+      setLinkUrl("");
+      return;
+    }
+    if (cmd === "formatBlock") {
+      safeExecCommand(cmd, false, `<${val}>`);
     } else {
-      document.execCommand(cmd, false, val);
+      safeExecCommand(cmd, false, val);
     }
     if (editorRef.current) onChange(editorRef.current.innerHTML);
   }, [onChange]);
+
+  const handleLinkConfirm = useCallback(() => {
+    const url = linkUrl.trim();
+    if (url) {
+      safeExecCommand("createLink", false, url);
+      if (editorRef.current) onChange(editorRef.current.innerHTML);
+    }
+    setLinkModalOpen(false);
+    setLinkUrl("");
+  }, [linkUrl, onChange]);
+
+  const handleLinkCancel = useCallback(() => {
+    setLinkModalOpen(false);
+    setLinkUrl("");
+  }, []);
 
   const handleInput = () => {
     if (editorRef.current) onChange(editorRef.current.innerHTML);
   };
 
   return (
-    <div className="rounded-md border" style={{ borderColor: "var(--border)" }}>
+    <div className="rounded-md border" style={{ borderColor: "var(--border)", position: "relative" }}>
       <div
         className="flex flex-wrap items-center gap-1 border-b p-2"
         style={{ borderColor: "var(--border)", background: "var(--surface)" }}
@@ -102,6 +139,93 @@ export default function RichTextEditor({ value, onChange, placeholder, height = 
           style={{ color: "var(--text-muted)" }}
         >
           {placeholder}
+        </div>
+      )}
+
+      {/* Link insertion modal */}
+      {linkModalOpen && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+            borderRadius: "inherit",
+          }}
+          onClick={handleLinkCancel}
+        >
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "12px",
+              padding: "20px",
+              minWidth: "320px",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 12px", fontSize: "14px", fontWeight: 700 }}>درج لینک</h3>
+            <input
+              type="text"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://..."
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                background: "var(--bg)",
+                color: "var(--text)",
+                fontSize: "13px",
+                direction: "ltr",
+                boxSizing: "border-box",
+                marginBottom: "12px",
+              }}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleLinkConfirm();
+                if (e.key === "Escape") handleLinkCancel();
+              }}
+            />
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={handleLinkCancel}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  color: "var(--text)",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                }}
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={handleLinkConfirm}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "var(--accent)",
+                  color: "var(--accent-foreground)",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                درج لینک
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

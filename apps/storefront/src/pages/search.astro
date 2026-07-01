@@ -5,17 +5,20 @@ import StoreFooter from "../components/store/StoreFooter.astro";
 import ProductCard from "../components/store/ProductCard.astro";
 import { getPublishedProducts } from "../data/catalog";
 
+// Build-time: render initial state with query param.
+// Client-side JS will fetch results from the admin API for live search.
 const query = Astro.url.searchParams.get("q") || "";
-const products = getPublishedProducts().filter((p) => {
-  if (!query) return false;
-  const q = query.toLowerCase();
-  return (
-    p.name.toLowerCase().includes(q) ||
-    p.summary.toLowerCase().includes(q) ||
-    p.keywords?.some((k) => k.includes(q))
-  );
-});
-const resultCount = products.length;
+const initialProducts = query
+  ? getPublishedProducts().filter((p) => {
+      const q = query.toLowerCase();
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.summary.toLowerCase().includes(q) ||
+        p.keywords?.some((k) => k.includes(q))
+      );
+    })
+  : [];
+const resultCount = initialProducts.length;
 ---
 
 <BaseLayout
@@ -29,16 +32,16 @@ const resultCount = products.length;
       <h1 style="margin:0 0 var(--space-2);font-size:clamp(1.3rem,2.4vw,1.7rem);font-weight:900;">
         {query ? `نتایج جستجو برای "${query}"` : "جستجوی محصولات"}
       </h1>
-      <p style="margin:0;color:var(--text-muted);font-size:var(--text-sm);">
+      <p data-result-count style="margin:0;color:var(--text-muted);font-size:var(--text-sm);">
         {resultCount > 0 ? `${resultCount.toLocaleString("fa-IR")} محصول پیدا شد` : "محصولی یافت نشد"}
       </p>
     </div>
     {resultCount > 0 ? (
-      <div class="product-grid" style="display:grid;gap:var(--space-4);grid-template-columns:repeat(auto-fill,minmax(240px,1fr));">
-        {products.map((p) => <ProductCard product={p} />)}
+      <div class="product-grid" style="display:grid;gap:var(--space-4);grid-template-columns:repeat(auto-fill,minmax(240px,1fr));" id="search-results">
+        {initialProducts.map((p) => <ProductCard product={p} />)}
       </div>
     ) : (
-      <div style="text-align:center;padding:var(--space-12) 0;">
+      <div id="search-empty" style="text-align:center;padding:var(--space-12) 0;">
         <p style="margin:0 0 var(--space-4);color:var(--text-muted);font-size:var(--text-lg);">
           {query ? `محصولی با نام "${query}" پیدا نشد` : "عبارت جستجو را وارد کنید"}
         </p>
@@ -53,3 +56,62 @@ const resultCount = products.length;
   </main>
   <StoreFooter />
 </BaseLayout>
+
+<script>
+  // Client-side search: fetch results from the admin API
+  (function () {
+    const params = new URLSearchParams(window.location.search);
+    const q = (params.get("q") || "").trim();
+    if (!q) return;
+
+    const resultsContainer = document.getElementById("search-results");
+    const emptyContainer = document.getElementById("search-empty");
+    if (!resultsContainer && !emptyContainer) return;
+
+    const adminApi = "/api/search/products?q=" + encodeURIComponent(q);
+
+    fetch(adminApi)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.ok) return;
+        const products = data.products;
+        if (!products || products.length === 0) {
+          if (resultsContainer) resultsContainer.remove();
+          return; // leave the SSR empty state visible
+        }
+        // Replace SSR results with API results
+        if (resultsContainer) {
+          resultsContainer.innerHTML = "";
+          products.forEach((p) => {
+            const card = document.createElement("div");
+            card.className = "product-card";
+            card.innerHTML = buildProductCardHtml(p);
+            resultsContainer.appendChild(card);
+          });
+        }
+        // Update result count
+        const countEl = document.querySelector("[data-result-count]");
+        if (countEl) {
+          countEl.textContent = products.length.toLocaleString("fa-IR") + " محصول پیدا شد";
+        }
+      })
+      .catch(() => {
+        // API unavailable — keep SSR results
+      });
+
+    function buildProductCardHtml(p) {
+      return `
+        <a href="/products/${p.slug}" style="text-decoration:none;color:inherit;display:block;border-radius:14px;overflow:hidden;background:var(--surface);border:1px solid var(--border);transition:transform .2s;">
+          <div style="aspect-ratio:1;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;overflow:hidden;">
+            <img src="${p.image}" alt="${p.imageAlt || p.name}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" />
+          </div>
+          <div style="padding:var(--space-3);">
+            <h3 style="margin:0 0 var(--space-1);font-size:var(--text-sm);font-weight:700;line-height:1.4;">${p.name}</h3>
+            <p style="margin:0;font-size:var(--text-xs);color:var(--text-muted);">${p.summary}</p>
+            <div style="margin-top:var(--space-2);font-weight:800;font-size:var(--text-base);">${Number(p.priceToman).toLocaleString("fa-IR")} تومان</div>
+          </div>
+        </a>
+      `;
+    }
+  })();
+</script>

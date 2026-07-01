@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { encrypt, decrypt, isEncrypted } from "@/lib/crypto-helper";
 
 const SETTINGS_FILE = path.join(process.cwd(), ".data", "site-settings.json");
 
@@ -112,6 +113,13 @@ SEO rules:
 Return ONLY valid JSON, no other text.`,
 };
 
+const API_KEY_FIELDS: (keyof SiteSettings)[] = [
+  "geminiApiKey",
+  "openrouterApiKey",
+  "deepseekApiKey",
+  "anthropicApiKey",
+];
+
 function ensureDir(): void {
   const dir = path.dirname(SETTINGS_FILE);
   if (!fs.existsSync(dir)) {
@@ -119,12 +127,39 @@ function ensureDir(): void {
   }
 }
 
+function encryptApiKeys(settings: Partial<SiteSettings>): Partial<SiteSettings> {
+  const result = { ...settings };
+  for (const field of API_KEY_FIELDS) {
+    const value = result[field];
+    if (typeof value === "string" && value.length > 0 && !isEncrypted(value)) {
+      (result as Record<string, unknown>)[field] = encrypt(value);
+    }
+  }
+  return result;
+}
+
+function decryptApiKeys(settings: SiteSettings): SiteSettings {
+  const result = { ...settings };
+  for (const field of API_KEY_FIELDS) {
+    const value = result[field];
+    if (typeof value === "string" && value.length > 0 && isEncrypted(value)) {
+      try {
+        (result as Record<string, unknown>)[field] = decrypt(value);
+      } catch {
+        // If decryption fails, keep as-is (e.g., during key rotation)
+      }
+    }
+  }
+  return result;
+}
+
 function loadSettings(): SiteSettings {
   try {
     if (!fs.existsSync(SETTINGS_FILE)) return { ...DEFAULTS };
     const raw = fs.readFileSync(SETTINGS_FILE, "utf8");
     const parsed = JSON.parse(raw) as Partial<SiteSettings>;
-    return { ...DEFAULTS, ...parsed };
+    const merged = { ...DEFAULTS, ...parsed };
+    return decryptApiKeys(merged);
   } catch {
     return { ...DEFAULTS };
   }
@@ -133,8 +168,20 @@ function loadSettings(): SiteSettings {
 function saveSettings(settings: Partial<SiteSettings>): void {
   ensureDir();
   const current = loadSettings();
-  const merged = { ...current, ...settings };
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2), "utf8");
+  // Re-encrypt current values that are already decrypted in memory
+  const stored: Partial<SiteSettings> = {};
+  for (const field of API_KEY_FIELDS) {
+    const currVal = current[field];
+    if (typeof currVal === "string" && currVal.length > 0) {
+      (stored as Record<string, unknown>)[field] = encrypt(currVal);
+    }
+  }
+  // Encrypt any new values in the update
+  const encryptedUpdates = encryptApiKeys(settings);
+  const merged = { ...stored, ...encryptedUpdates };
+  // Merge with non-key fields from current
+  const fullMerged = { ...current, ...merged };
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(fullMerged, null, 2), "utf8");
 }
 
 export function getSiteSettings(): SiteSettings {
@@ -169,7 +216,7 @@ export function readGeminiApiKeyFromFile(): string | null {
 }
 
 export function writeGeminiApiKeyToFile(apiKey: string): void {
-  saveSettings({ geminiApiKey: apiKey.trim() });
+  saveSettings({ geminiApiKey: apiKey });
 }
 
 export function readOpenRouterApiKeyFromFile(): string | null {
@@ -178,7 +225,7 @@ export function readOpenRouterApiKeyFromFile(): string | null {
 }
 
 export function writeOpenRouterApiKeyToFile(apiKey: string): void {
-  saveSettings({ openrouterApiKey: apiKey.trim() });
+  saveSettings({ openrouterApiKey: apiKey });
 }
 
 export function getEffectiveOpenRouterApiKey(): string | null {
@@ -208,7 +255,7 @@ export function readDeepSeekApiKeyFromFile(): string | null {
 }
 
 export function writeDeepSeekApiKeyToFile(apiKey: string): void {
-  saveSettings({ deepseekApiKey: apiKey.trim() });
+  saveSettings({ deepseekApiKey: apiKey });
 }
 
 export function getEffectiveDeepSeekApiKey(): string | null {
@@ -246,7 +293,7 @@ export function readAnthropicApiKeyFromFile(): string | null {
 }
 
 export function writeAnthropicApiKeyToFile(apiKey: string): void {
-  saveSettings({ anthropicApiKey: apiKey.trim() });
+  saveSettings({ anthropicApiKey: apiKey });
 }
 
 export function getEffectiveAnthropicApiKey(): string | null {

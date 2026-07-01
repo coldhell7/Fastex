@@ -17,6 +17,31 @@ import { trackUsage } from "@/lib/ai-usage";
 
 export const runtime = "nodejs";
 
+// In-memory rate limiter fallback when Redis is unavailable
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(key: string, maxRequests: number, windowMs: number): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= maxRequests) {
+    return false;
+  }
+  entry.count++;
+  return true;
+}
+
+// Clean up stale entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rateLimitMap) {
+    if (now > v.resetAt) rateLimitMap.delete(k);
+  }
+}, 5 * 60 * 1000);
+
 function getRedis() {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -170,6 +195,13 @@ export async function POST(req: Request) {
       const cached = await redis.get(cacheKey);
       if (cached) {
         return NextResponse.json({ source: "cache", workflow: "ai_generated", draft: cached });
+      }
+    } else {
+      // Fallback in-memory rate limiter when Redis is not available
+      const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+      const rateKey = `ratelimit:ai:product:${ip}`;
+      if (!checkRateLimit(rateKey, 20, 60_000)) {
+        return NextResponse.json({ error: "محدودیت نرخ درخواست؛ لحظاتی بعد دوباره تلاش کنید." }, { status: 429 });
       }
     }
 

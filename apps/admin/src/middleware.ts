@@ -12,24 +12,12 @@ export async function middleware(request: NextRequest) {
     }
     return NextResponse.next();
   }
-  if (pathname.startsWith("/api/auth/login")) return NextResponse.next();
-  if (pathname.startsWith("/api/auth/logout")) return NextResponse.next();
-  if (pathname.startsWith("/api/settings")) return NextResponse.next();
-  if (pathname.startsWith("/api/ai")) return NextResponse.next();
-  if (pathname.startsWith("/api/favicon")) return NextResponse.next();
-  if (pathname.startsWith("/api/homepage")) return NextResponse.next();
-  if (pathname.startsWith("/api/cms")) return NextResponse.next();
-  if (pathname.startsWith("/api/seo/sitemap")) return NextResponse.next();
-  if (pathname.startsWith("/api/seo/robots")) return NextResponse.next();
-  if (pathname.startsWith("/api/seo/analyze")) return NextResponse.next();
-  if (pathname.startsWith("/api/seo/keywords")) return NextResponse.next();
-  if (pathname.startsWith("/api/seo/og-preview")) return NextResponse.next();
-  if (pathname.startsWith("/api/seo/webp-convert")) return NextResponse.next();
-  if (pathname.startsWith("/api/seo/incomplete")) return NextResponse.next();
-  if (pathname.startsWith("/api/seo/generate-meta")) return NextResponse.next();
-  if (pathname.startsWith("/api/indexing")) return NextResponse.next();
-  if (pathname.startsWith("/api/orders-demo")) return NextResponse.next();
-  if (pathname.startsWith("/api/openrouter")) return NextResponse.next();
+  // Only these API endpoints are public:
+  if (pathname === "/api/auth/login") return NextResponse.next();
+  if (pathname === "/api/auth/logout") return NextResponse.next();
+  if (pathname === "/api/seo/sitemap") return NextResponse.next();
+  if (pathname === "/api/seo/robots") return NextResponse.next();
+  // /_next/static, /_next/image, favicon.ico are already excluded by matcher
 
   const token = request.cookies.get("admin_session")?.value ?? "";
   if (!token || !(await verifySessionValue(token))) {

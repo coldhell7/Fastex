@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { readPosts, writePosts } from "@/lib/cms-files";
 import type { CmsPost } from "@repo/cms/types";
 import { randomUUID } from "node:crypto";
+import { okResponse, errorResponse } from "@/lib/cms-utils";
+import { logger } from "@repo/shared";
 
 export const runtime = "nodejs";
 
@@ -18,23 +20,20 @@ export async function PUT(req: Request) {
     }
     posts[idx] = { ...posts[idx], ...body };
     writePosts(posts);
-    return NextResponse.json({ ok: true, post: posts[idx] });
+    logger.info(`posts (list PUT): updated ${body.id}`);
+    return okResponse({ post: posts[idx] });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, message: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return errorResponse(e);
   }
 }
 
 export async function GET() {
   try {
-    return NextResponse.json({ ok: true, posts: readPosts() });
+    const posts = readPosts();
+    logger.info(`posts (list GET): ${posts.length} items`);
+    return okResponse({ posts });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, message: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return errorResponse(e);
   }
 }
 
@@ -71,11 +70,9 @@ export async function POST(req: Request) {
     };
     posts.unshift(post);
     writePosts(posts);
-    return NextResponse.json({ ok: true, post });
+    logger.info(`posts (POST): created ${post.slug}`);
+    return okResponse({ post });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, message: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return errorResponse(e);
   }
 }

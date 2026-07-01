@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { SeoSettings } from "@repo/shared";
+import { SEO_DEFAULTS } from "@repo/shared";
 
 const SETTINGS_FILE = path.join(
   process.cwd(),
@@ -30,30 +32,6 @@ export type SiteSettings = {
   accentColor: string;
 };
 
-export type SeoSettings = {
-  metaTitleTemplate: string;
-  metaDescriptionTemplate: string;
-  canonicalBaseUrl: string;
-  ogImageDefault: string;
-  sitemapEnabled: boolean;
-  // New SEO settings
-  structuredDataEnabled: boolean;
-  twitterCardType: string;
-  twitterSite: string;
-  twitterCreator: string;
-  ogTypeDefault: string;
-  ogSiteName: string;
-  fbAppId: string;
-  // Performance settings
-  enableLazyLoading: boolean;
-  enablePreload: boolean;
-  enablePrefetch: boolean;
-  // Security settings
-  enableHttpsRedirect: boolean;
-  enableSecurityHeaders: boolean;
-  hstsMaxAge: number;
-};
-
 const DEFAULTS: SiteSettings = {
   siteName: "مدالینو",
   siteDescription: "فروشگاه و مجله سلامت مدالینو",
@@ -63,29 +41,8 @@ const DEFAULTS: SiteSettings = {
   accentColor: "#38bdf8",
 };
 
-const SEO_DEFAULTS: SeoSettings = {
-  metaTitleTemplate: "{title} | {siteName}",
-  metaDescriptionTemplate: "{description}",
-  canonicalBaseUrl: "https://medalino.ir",
-  ogImageDefault: "/images/og-default.jpg",
-  sitemapEnabled: true,
-  // New SEO settings defaults
-  structuredDataEnabled: true,
-  twitterCardType: "summary_large_image",
-  twitterSite: "@medalino",
-  twitterCreator: "@medalino",
-  ogTypeDefault: "website",
-  ogSiteName: "Medalino",
-  fbAppId: "",
-  // Performance settings defaults
-  enableLazyLoading: true,
-  enablePreload: true,
-  enablePrefetch: true,
-  // Security settings defaults
-  enableHttpsRedirect: true,
-  enableSecurityHeaders: true,
-  hstsMaxAge: 31536000, // 1 year
-};
+// Use the shared SEO defaults to avoid duplication
+// (SEO_DEFAULTS imported from @repo/shared)
 
 export function getSiteSettings(): SiteSettings {
   try {

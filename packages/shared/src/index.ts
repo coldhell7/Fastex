@@ -3,6 +3,12 @@ import { z } from "zod";
 export { formatJalaliDate, formatJalaliYear } from "./jalali";
 export type { JalaliFormatOptions } from "./jalali";
 
+export { logger, setLogLevel } from "./logger";
+export type { LogLevel } from "./logger";
+
+export { SEO_DEFAULTS } from "./seo-types";
+export type { SeoSettings } from "./seo-types";
+
 export const orderStatusSchema = z.enum([
   "placed",
   "confirmed",

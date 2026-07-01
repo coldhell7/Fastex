@@ -2,17 +2,18 @@ import { NextResponse } from "next/server";
 import { readPages, writePages } from "@/lib/cms-files";
 import type { CmsPage } from "@repo/cms/types";
 import { randomUUID } from "node:crypto";
+import { okResponse, errorResponse } from "@/lib/cms-utils";
+import { logger } from "@repo/shared";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    return NextResponse.json({ ok: true, pages: readPages() });
+    const pages = readPages();
+    logger.info(`pages (list GET): ${pages.length} items`);
+    return okResponse({ pages });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, message: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return errorResponse(e);
   }
 }
 
@@ -46,11 +47,9 @@ export async function POST(req: Request) {
     };
     pages.unshift(page);
     writePages(pages);
-    return NextResponse.json({ ok: true, page });
+    logger.info(`pages (POST): created ${page.slug}`);
+    return okResponse({ page });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, message: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return errorResponse(e);
   }
 }
